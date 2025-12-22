@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Effective Pay Rate Calculator (Batch)</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        max-width: 900px; /* Increased width to accommodate the new Date column */
+    }
+    label {
+        font-weight: bold;
+    }
+    input[type="text"], input[type="number"], input[type="date"] {
+        padding: 6px;
+        margin: 5px 0 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    input[type="number"] {
+        width: calc(50% - 10px); /* Adjust width for side-by-side */
+        display: inline-block;
+        margin-right: 10px;
+    }
+    button {
+        padding: 10px 15px;
+        background: #0078ff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+    button:hover {
+        background: #005fcc;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    .settings-section {
+        border: 1px solid #ccc;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+        background: #f9f9f9;
+    }
+    #results-section {
+        margin-top: 30px;
+    }
+    .input-date {
+        min-width: 120px;
+    }
+</style>
+</head>
+<body>
+
+<h2>Effective Pay Rate Calculator (Batch)</h2>
+
+<div class="settings-section">
+    <h3>Rate Settings</h3>
+    <label>Actual Pay Rate (locked):</label>
+    <input type="number" id="rate_actual" value="30" step="0.01">
+
+    <label>Correct Pay Rate (target):</label>
+    <input type="number" id="rate_target" value="32" step="0.01">
+
+    <p>Correction factor: <span id="correction_factor">1.0667</span></p>
+</div>
+
+<h3>Work Entries</h3>
+<table id="input-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Start Time (e.g., 2:05 pm)</th>
+            <th>End Time (e.g., 5:00 pm)</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr class="work-entry">
+            <td><input type="date" class="work-date" value="2025-01-01"></td>
+            <td><input type="text" class="start-time" placeholder="9:00 am"></td>
+            <td><input type="text" class="end-time" placeholder="5:00 pm"></td>
+            <td><button onclick="removeRow(this)">Remove</button></td>
+        </tr>
+    </tbody>
+</table>
+
+<button onclick="addRow()">Add Another Entry</button>
+<button onclick="calculate()">Calculate Adjusted Hours</button>
+
+<div id="results-section">
+    <h3>Adjusted Hours Report</h3>
+    <table id="results-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Original Start</th>
+                <th>Original End</th>
+                <th>Actual Hours Worked</th>
+                <th>Hours to Report</th>
+                <th>Reported Start</th>
+                <th>Reported End</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+    <div id="output"></div>
+</div>
+
+<script>
+// Global variable for the correction factor
+let correctionFactor = 1;
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    // Set default date for the initial row to today
+    const today = new Date().toISOString().slice(0, 10);
+    document.querySelector(".work-date").value = today;
+    
+    // Calculate and display initial correction factor on load
+    updateCorrectionFactorDisplay();
+    // Add event listeners for rate changes
+    document.getElementById("rate_actual").addEventListener('input', updateCorrectionFactorDisplay);
+    document.getElementById("rate_target").addEventListener('input', updateCorrectionFactorDisplay);
+});
+
+function updateCorrectionFactorDisplay() {
+    const rA = parseFloat(document.getElementById("rate_actual").value);
+    const rT = parseFloat(document.getElementById("rate_target").value);
+
+    if (rA > 0) {
+        correctionFactor = rT / rA;
+        document.getElementById("correction_factor").textContent = correctionFactor.toFixed(4);
+    } else {
+        correctionFactor = 1;
+        document.getElementById("correction_factor").textContent = "Error: Actual Rate must be > 0";
+    }
+}
+
+// Parses a time like "2:05 pm" or "11:30 AM"
+function parseTime(tstr) {
+    tstr = tstr.trim().toLowerCase();
+    const match = tstr.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm)/);
+    if (!match) return null;
+
+    let hour = parseInt(match[1]);
+    let min = match[2] ? parseInt(match[2]) : 0;
+    const ampm = match[3];
+
+    if (ampm === "pm" && hour !== 12) hour += 12;
+    if (ampm === "am" && hour === 12) hour = 0;
+
+    return { hour, min };
+}
+
+function formatTime(dateObj) {
+    let hours = dateObj.getHours();
+    let minutes = dateObj.getMinutes();
+
+    let ampm = hours >= 12 ? "pm" : "am";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+
+    let m = minutes.toString().padStart(2, "0");
+
+    return `${hours}:${m} ${ampm}`;
+}
+
+function addRow() {
+    const tableBody = document.querySelector("#input-table tbody");
+    const newRow = document.createElement("tr");
+    const today = new Date().toISOString().slice(0, 10);
+    newRow.className = "work-entry";
+    newRow.innerHTML = `
+        <td><input type="date" class="work-date" value="${today}"></td>
+        <td><input type="text" class="start-time" placeholder="Start Time"></td>
+        <td><input type="text" class="end-time" placeholder="End Time"></td>
+        <td><button onclick="removeRow(this)">Remove</button></td>
+    `;
+    tableBody.appendChild(newRow);
+}
+
+function removeRow(button) {
+    const row = button.closest('tr');
+    row.remove();
+}
+
+function calculate() {
+    // Clear previous results
+    const resultsBody = document.querySelector("#results-table tbody");
+    resultsBody.innerHTML = "";
+    document.getElementById("output").innerHTML = "";
+
+    updateCorrectionFactorDisplay();
+
+    if (correctionFactor <= 0) {
+        document.getElementById("output").innerHTML =
+            "<p style='color:red;'>Error in rates: Cannot calculate correction factor.</p>";
+        return;
+    }
+
+    const rows = document.querySelectorAll(".work-entry");
+    let isValid = true;
+
+    rows.forEach((row, index) => {
+        const dateInput = row.querySelector(".work-date");
+        const startInput = row.querySelector(".start-time");
+        const endInput = row.querySelector(".end-time");
+        
+        const dateStr = dateInput.value;
+        const startStr = startInput.value;
+        const endStr = endInput.value;
+
+        const sParsed = parseTime(startStr);
+        const eParsed = parseTime(endStr);
+
+        if (!dateStr || !sParsed || !eParsed) {
+            document.getElementById("output").innerHTML =
+                `<p style='color:red;'>Please enter a valid Date and valid AM/PM times for entry ${index + 1}.</p>`;
+            isValid = false;
+            return;
+        }
+        
+        // Use the input date string to create the base date
+        const baseDate = new Date(dateStr);
+        const year = baseDate.getFullYear();
+        const month = baseDate.getMonth();
+        const day = baseDate.getDate();
+
+        // Construct actual start and end times using the date
+        const s = new Date(year, month, day, sParsed.hour, sParsed.min);
+        let e = new Date(year, month, day, eParsed.hour, eParsed.min);
+
+        // Handle overnight shift (end time is on the next day)
+        if (e < s) e = new Date(year, month, day + 1, eParsed.hour, eParsed.min);
+
+        // Hours actually worked
+        const h = (e - s) / 1000 / 3600;
+
+        // Adjusted hours
+        const H = h * correctionFactor; // Use global correction factor
+
+        // Compute adjusted end time (reported end time)
+        const reportedEnd = new Date(s.getTime() + H * 3600 * 1000);
+
+        // Format the date for display
+        const displayDate = new Date(dateStr).toLocaleDateString('en-US', { timeZone: 'UTC' });
+
+        // Insert results into the results table
+        const resultRow = resultsBody.insertRow();
+        resultRow.innerHTML = `
+            <td>${displayDate}</td>
+            <td>${formatTime(s)}</td>
+            <td>${formatTime(e)}</td>
+            <td>${h.toFixed(4)}</td>
+            <td>${H.toFixed(4)}</td>
+            <td>${formatTime(s)}</td>
+            <td>${formatTime(reportedEnd)}</td>
+        `;
+    });
+
+    if (isValid) {
+        document.getElementById("output").innerHTML =
+            `<p style='color:green;'>Calculation complete! Correction factor used: ${correctionFactor.toFixed(4)}.</p>`;
+    }
+}
+</script>
+
+</body>
+</html>
